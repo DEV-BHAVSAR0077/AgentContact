@@ -44,6 +44,7 @@ class Model(Base):
     file_name: Mapped[str | None] = mapped_column(String, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String, default="READY")
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
     input_schema: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     output_schema: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
