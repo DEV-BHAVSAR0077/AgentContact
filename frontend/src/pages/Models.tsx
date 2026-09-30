@@ -1,11 +1,15 @@
 import { Box, Plus } from 'lucide-react';
 
 export default function Models() {
+  const handleAdd = () => alert("Add Model modal opening...");
+  const handleEdit = () => alert("Edit Model modal opening...");
+  const handleUse = () => alert("Redirecting to Workflow Builder with model selected...");
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Models Library</h1>
-        <button className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium">
+        <button onClick={handleAdd} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium transition-colors">
           <Plus className="w-4 h-4 mr-2" /> Add Model
         </button>
       </div>
@@ -26,8 +30,8 @@ export default function Models() {
             <p className="text-sm text-slate-500">Google Gemini Pro 1.5</p>
           </div>
           <div className="px-5 py-3 bg-slate-50 flex justify-end space-x-2">
-            <button className="text-sm text-slate-600 hover:text-indigo-600 font-medium">Edit</button>
-            <button className="text-sm text-indigo-600 font-medium">Use in Workflow</button>
+            <button onClick={handleEdit} className="text-sm text-slate-600 hover:text-indigo-600 font-medium transition-colors">Edit</button>
+            <button onClick={handleUse} className="text-sm text-indigo-600 font-medium hover:text-indigo-700 transition-colors">Use in Workflow</button>
           </div>
         </div>
 
@@ -52,8 +56,8 @@ export default function Models() {
             </div>
           </div>
           <div className="px-5 py-3 bg-slate-50 flex justify-end space-x-2">
-            <button className="text-sm text-slate-600 hover:text-indigo-600 font-medium">Edit</button>
-            <button className="text-sm text-indigo-600 font-medium">Use in Workflow</button>
+            <button onClick={handleEdit} className="text-sm text-slate-600 hover:text-indigo-600 font-medium transition-colors">Edit</button>
+            <button onClick={handleUse} className="text-sm text-indigo-600 font-medium hover:text-indigo-700 transition-colors">Use in Workflow</button>
           </div>
         </div>
       </div>

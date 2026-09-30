@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -36,6 +36,14 @@ function Builder() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{role: string, content: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   const onConnect = useCallback((params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -62,6 +70,7 @@ function Builder() {
   const executeWorkflow = () => {
     setIsRunning(true);
     setExecutionLogs(["Workflow started..."]);
+    setChatMessages([{role: 'system', content: 'Workflow started. You can now chat with the agents.'}]);
     
     // Simulate real-time execution logs
     let step = 0;
@@ -74,7 +83,27 @@ function Builder() {
         setIsRunning(false);
         clearInterval(interval);
       }
+    }, 1500);
+  };
+
+  const handleSendMessage = () => {
+    if (!chatInput.trim()) return;
+    setChatMessages(prev => [...prev, {role: 'user', content: chatInput}]);
+    setChatInput('');
+    
+    // Mock bot response
+    setTimeout(() => {
+      setChatMessages(prev => [...prev, {role: 'agent', content: 'I have processed your request based on the current workflow.'}]);
+      setExecutionLogs(prev => [...prev, 'Agent responded to user input.']);
     }, 1000);
+  };
+
+  const saveWorkflow = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      setIsSaving(false);
+      alert('Workflow saved successfully!');
+    }, 800);
   };
 
   return (
@@ -88,8 +117,8 @@ function Builder() {
           <button onClick={addModel} className="flex items-center px-3 py-2 bg-slate-100 text-slate-700 rounded hover:bg-slate-200 text-sm font-medium">
             <Plus className="w-4 h-4 mr-1" /> Model
           </button>
-          <button className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 text-sm font-medium border border-indigo-200">
-            <Save className="w-4 h-4 mr-2" /> Save Workflow
+          <button onClick={saveWorkflow} disabled={isSaving} className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 text-sm font-medium border border-indigo-200 disabled:opacity-50">
+            <Save className="w-4 h-4 mr-2" /> {isSaving ? 'Saving...' : 'Save Workflow'}
           </button>
           <button onClick={executeWorkflow} disabled={isRunning} className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium disabled:opacity-50">
             <Play className="w-4 h-4 mr-2" /> {isRunning ? 'Running...' : 'Run'}
@@ -115,16 +144,60 @@ function Builder() {
           </ReactFlow>
         </div>
         
-        {/* Logs Panel */}
-        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50 flex flex-col h-64 lg:h-full">
-          <div className="p-3 border-b border-slate-200 bg-white font-semibold text-sm text-slate-700">
-            Execution Logs
+        {/* Right Sidebar (Chat + Logs) */}
+        <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-slate-200 bg-slate-50 flex flex-col h-96 lg:h-full">
+          
+          {/* Chat Panel */}
+          <div className="flex-1 flex flex-col border-b border-slate-200">
+            <div className="p-3 border-b border-slate-200 bg-white font-semibold text-sm text-slate-700">
+              Interactive Chat
+            </div>
+            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50 min-h-[200px]">
+              {chatMessages.length === 0 ? (
+                <div className="text-slate-400 text-sm italic text-center mt-4">Run the workflow to start chatting.</div>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] rounded-lg p-2 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white' : msg.role === 'system' ? 'bg-slate-200 text-slate-600 italic' : 'bg-white border border-slate-200 text-slate-800'}`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+            <div className="p-3 bg-white border-t border-slate-200 flex">
+              <input 
+                type="text" 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder="Type a message..."
+                disabled={!isRunning && chatMessages.length === 0}
+                className="flex-1 border border-slate-300 rounded-l px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 disabled:bg-slate-100"
+              />
+              <button 
+                onClick={handleSendMessage}
+                disabled={!isRunning && chatMessages.length === 0}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-r text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
           </div>
-          <div className="flex-1 p-4 overflow-auto font-mono text-xs text-slate-600 space-y-2">
-            {executionLogs.map((log, index) => (
-              <div key={index} className="border-b border-slate-100 pb-1">{log}</div>
-            ))}
-            {executionLogs.length === 0 && <div className="text-slate-400 italic">No execution logs yet. Click Run to start.</div>}
+
+          {/* Logs Panel */}
+          <div className="h-1/3 flex flex-col min-h-[150px]">
+            <div className="p-3 border-b border-slate-200 bg-white font-semibold text-sm text-slate-700 flex justify-between items-center">
+              <span>Execution Logs</span>
+              {isRunning && <span className="flex h-2 w-2 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>}
+            </div>
+            <div className="flex-1 p-3 overflow-y-auto font-mono text-xs text-slate-600 space-y-1.5 bg-slate-900 text-green-400">
+              {executionLogs.map((log, index) => (
+                <div key={index} className="pb-1">{'>'} {log}</div>
+              ))}
+              {executionLogs.length === 0 && <div className="text-slate-500 italic">No execution logs yet. Click Run to start.</div>}
+            </div>
           </div>
         </div>
       </div>
