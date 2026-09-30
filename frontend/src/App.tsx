@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Models from './pages/Models';
 import Agents from './pages/Agents';
 import WorkflowBuilder from './pages/WorkflowBuilder';
+import Workflows from './pages/Workflows';
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -44,7 +45,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/models" element={<Models />} />
           <Route path="/agents" element={<Agents />} />
-          <Route path="/workflows" element={<WorkflowBuilder />} />
+          <Route path="/workflows" element={<Workflows />} />
+          <Route path="/workflows/:id" element={<WorkflowBuilder />} />
         </Routes>
       </Layout>
     </BrowserRouter>

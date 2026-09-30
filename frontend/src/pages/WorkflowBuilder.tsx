@@ -28,10 +28,14 @@ const initialNodes = [
 ];
 const initialEdges = [{ id: 'e1-2', source: '1', target: '2' }];
 
-let id = 3;
-const getId = () => `${id++}`;
+import { useParams } from 'react-router-dom';
+import api from '../api';
+
+let nodeCounter = 3;
+const getId = () => `${nodeCounter++}`;
 
 function Builder() {
+  const { id: workflowId } = useParams();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
@@ -44,6 +48,24 @@ function Builder() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  useEffect(() => {
+    if (!workflowId) return;
+    const fetchWorkflow = async () => {
+      try {
+        const res = await api.get(`/workflows/${workflowId}`);
+        if (res.data.nodes && res.data.nodes.length > 0) {
+          setNodes(res.data.nodes);
+        }
+        if (res.data.edges && res.data.edges.length > 0) {
+          setEdges(res.data.edges);
+        }
+      } catch (e) {
+        console.error("Failed to load workflow", e);
+      }
+    };
+    fetchWorkflow();
+  }, [workflowId, setNodes, setEdges]);
 
   const onConnect = useCallback((params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -67,33 +89,35 @@ function Builder() {
     setNodes((nds) => nds.concat(newNode));
   };
 
-  const executeWorkflow = () => {
+  const executeWorkflow = async () => {
     try {
       setIsRunning(true);
       setExecutionLogs(["Workflow started..."]);
       setChatMessages([{role: 'system', content: 'Workflow started. You can now chat with the agents.'}]);
       
-      // Simulate real-time execution logs safely
-      let step = 0;
-      const interval = setInterval(() => {
-        try {
-          if (step < nodes.length) {
-            const currentNode = nodes[step];
-            const nodeName = currentNode?.data?.label || currentNode?.id || 'Unknown Node';
-            setExecutionLogs(prev => [...prev, `Executing node: ${nodeName}`]);
-            step++;
-          } else {
-            setExecutionLogs(prev => [...prev, "Workflow completed successfully."]);
+      const res = await api.post(`/executions/workflow/${workflowId}`);
+      const execId = res.data.id;
+      
+      const ws = new WebSocket(`ws://localhost:8000/api/v1/executions/${execId}/stream?token=mock`);
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'log') {
+          setExecutionLogs(prev => [...prev, data.message]);
+        } else if (data.type === 'status') {
+          setExecutionLogs(prev => [...prev, `Status update: ${data.status}`]);
+          if (data.status === 'COMPLETED' || data.status === 'FAILED') {
             setIsRunning(false);
-            clearInterval(interval);
+            ws.close();
           }
-        } catch (intervalError) {
-          console.error("Execution error:", intervalError);
-          setExecutionLogs(prev => [...prev, `Error during execution: ${String(intervalError)}`]);
-          setIsRunning(false);
-          clearInterval(interval);
         }
-      }, 1500);
+      };
+
+      ws.onerror = () => {
+        setExecutionLogs(prev => [...prev, 'WebSocket Error']);
+        setIsRunning(false);
+      };
+
     } catch (err) {
       console.error("Startup error:", err);
       setIsRunning(false);
@@ -106,19 +130,29 @@ function Builder() {
     setChatMessages(prev => [...prev, {role: 'user', content: chatInput}]);
     setChatInput('');
     
-    // Mock bot response
+    // Note: To connect chat messages to real backend, we'd need a specific chat WS endpoint
     setTimeout(() => {
       setChatMessages(prev => [...prev, {role: 'agent', content: 'I have processed your request based on the current workflow.'}]);
       setExecutionLogs(prev => [...prev, 'Agent responded to user input.']);
     }, 1000);
   };
 
-  const saveWorkflow = () => {
+  const saveWorkflow = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await api.put(`/workflows/${workflowId}`, {
+        name: 'Updated Workflow',
+        description: 'Saved from builder',
+        nodes,
+        edges
+      });
       alert('Workflow saved successfully!');
-    }, 800);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save workflow. You may need to create it first.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
