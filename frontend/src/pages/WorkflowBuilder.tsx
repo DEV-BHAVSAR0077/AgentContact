@@ -68,22 +68,37 @@ function Builder() {
   };
 
   const executeWorkflow = () => {
-    setIsRunning(true);
-    setExecutionLogs(["Workflow started..."]);
-    setChatMessages([{role: 'system', content: 'Workflow started. You can now chat with the agents.'}]);
-    
-    // Simulate real-time execution logs
-    let step = 0;
-    const interval = setInterval(() => {
-      if (step < nodes.length) {
-        setExecutionLogs(prev => [...prev, `Executing node: ${nodes[step].data.label}`]);
-        step++;
-      } else {
-        setExecutionLogs(prev => [...prev, "Workflow completed successfully."]);
-        setIsRunning(false);
-        clearInterval(interval);
-      }
-    }, 1500);
+    try {
+      setIsRunning(true);
+      setExecutionLogs(["Workflow started..."]);
+      setChatMessages([{role: 'system', content: 'Workflow started. You can now chat with the agents.'}]);
+      
+      // Simulate real-time execution logs safely
+      let step = 0;
+      const interval = setInterval(() => {
+        try {
+          if (step < nodes.length) {
+            const currentNode = nodes[step];
+            const nodeName = currentNode?.data?.label || currentNode?.id || 'Unknown Node';
+            setExecutionLogs(prev => [...prev, `Executing node: ${nodeName}`]);
+            step++;
+          } else {
+            setExecutionLogs(prev => [...prev, "Workflow completed successfully."]);
+            setIsRunning(false);
+            clearInterval(interval);
+          }
+        } catch (intervalError) {
+          console.error("Execution error:", intervalError);
+          setExecutionLogs(prev => [...prev, `Error during execution: ${String(intervalError)}`]);
+          setIsRunning(false);
+          clearInterval(interval);
+        }
+      }, 1500);
+    } catch (err) {
+      console.error("Startup error:", err);
+      setIsRunning(false);
+      alert("Failed to start workflow execution.");
+    }
   };
 
   const handleSendMessage = () => {
