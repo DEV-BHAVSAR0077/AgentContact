@@ -14,7 +14,7 @@ router = APIRouter(prefix="/executions", tags=["executions"])
 active_connections: Dict[str, List[WebSocket]] = {}
 
 @router.post("/workflow/{workflow_id}", response_model=ExecutionResponse)
-async def execute_workflow(workflow_id: str, db: AsyncSession = Depends(get_db)):
+async def execute_workflow(workflow_id: str, db: AsyncSession = Depends(get_db)) -> Execution:
     result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
     db_wf = result.scalars().first()
     if not db_wf:
@@ -36,18 +36,17 @@ async def execute_workflow(workflow_id: str, db: AsyncSession = Depends(get_db))
     await db.refresh(execution)
     
     # In a real system, this would trigger a celery task or asyncio background task
-    # For MVP, we simulate execution
-    asyncio.create_task(simulate_execution(execution.id, db_wf.nodes, db_wf.edges))
+    asyncio.create_task(execute_in_background(execution.id, db_wf.nodes, db_wf.edges))
     
     return execution
 
 @router.get("/", response_model=list[ExecutionResponse])
-async def get_executions(db: AsyncSession = Depends(get_db)):
+async def get_executions(db: AsyncSession = Depends(get_db)) -> list[Execution]:
     result = await db.execute(select(Execution))
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 @router.get("/{exec_id}", response_model=ExecutionResponse)
-async def get_execution(exec_id: str, db: AsyncSession = Depends(get_db)):
+async def get_execution(exec_id: str, db: AsyncSession = Depends(get_db)) -> Execution:
     result = await db.execute(select(Execution).where(Execution.id == exec_id))
     db_exec = result.scalars().first()
     if not db_exec:
@@ -55,7 +54,7 @@ async def get_execution(exec_id: str, db: AsyncSession = Depends(get_db)):
     return db_exec
 
 @router.websocket("/{exec_id}/stream")
-async def websocket_endpoint(websocket: WebSocket, exec_id: str):
+async def websocket_endpoint(websocket: WebSocket, exec_id: str) -> None:
     await websocket.accept()
     if exec_id not in active_connections:
         active_connections[exec_id] = []
@@ -69,48 +68,13 @@ async def websocket_endpoint(websocket: WebSocket, exec_id: str):
         if not active_connections[exec_id]:
             del active_connections[exec_id]
 
-async def simulate_execution(execution_id: str, nodes: List[Dict], edges: List[Dict]):
-    # Mocking execution engine behavior
-    for node in nodes:
-        await asyncio.sleep(2)
-        message = {
-            "type": "log",
-            "nodeId": node.get("id"),
-            "status": "RUNNING",
-            "message": f"Executing node {node.get('type', 'Unknown')}"
-        }
-        await broadcast_message(execution_id, message)
-        
-        await asyncio.sleep(2)
-        message = {
-            "type": "log",
-            "nodeId": node.get("id"),
-            "status": "COMPLETED",
-            "message": f"Completed node {node.get('type', 'Unknown')}"
-        }
-        await broadcast_message(execution_id, message)
-    
-    # Update DB
-    # We must construct a new session via async_sessionmaker
-    # We can't import SessionLocal directly, we need to use the engine
-    from app.core.database import engine
-    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
-    
-    async with SessionLocal() as db:
-        result = await db.execute(select(Execution).where(Execution.id == execution_id))
-        execution = result.scalars().first()
-        if execution:
-            execution.status = "COMPLETED"
-            execution.completed_at = datetime.now(timezone.utc)
-            await db.commit()
-            
-            message = {
-                "type": "status",
-                "status": "COMPLETED"
-            }
-            await broadcast_message(execution_id, message)
+from app.core.engine import GraphEngine
 
-async def broadcast_message(execution_id: str, message: dict):
+async def execute_in_background(execution_id: str, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> None:
+    engine = GraphEngine(execution_id, nodes, edges, broadcast_message)
+    await engine.run()
+
+async def broadcast_message(execution_id: str, message: dict[str, Any]) -> None:
     if execution_id in active_connections:
         websockets = active_connections[execution_id]
         for ws in websockets:
