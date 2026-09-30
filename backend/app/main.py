@@ -1,9 +1,14 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import models, agents, workflows, executions
+from app.api.endpoints import models, agents, workflows, executions, auth
 from app.core.config import settings
 import uuid
+import time
+import logging
+from contextlib import asynccontextmanager
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
 import time
 import logging
 
@@ -14,9 +19,17 @@ handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter('{"time": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s"}'))
 logger.addHandler(handler)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    redis_conn = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+    await FastAPILimiter.init(redis_conn)
+    yield
+    await redis_conn.close()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
+    lifespan=lifespan
 )
 
 # CORS setup (Phase 1 Fix D8)
@@ -64,6 +77,7 @@ async def readyz():
     return {"status": "ready"}
 
 # Includes routers
+app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(models.router, prefix=settings.API_V1_STR)
 app.include_router(agents.router, prefix=settings.API_V1_STR)
 app.include_router(workflows.router, prefix=settings.API_V1_STR)
