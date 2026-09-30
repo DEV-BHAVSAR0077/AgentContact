@@ -1,21 +1,21 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Literal, Union, Annotated, Any
 from datetime import datetime
 
 class ModelBase(BaseModel):
     name: str
     source_type: str
-    provider: Optional[str] = None
-    model_name: Optional[str] = None
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-    system_prompt: Optional[str] = None
-    framework: Optional[str] = None
-    format: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = None
-    output_schema: Optional[Dict[str, Any]] = None
+    provider: str | None = None
+    model_name: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    system_prompt: str | None = None
+    framework: str | None = None
+    format: str | None = None
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
 
 class ModelCreate(ModelBase):
     pass
@@ -23,17 +23,16 @@ class ModelCreate(ModelBase):
 class ModelResponse(ModelBase):
     id: str
     status: str
-    file_name: Optional[str] = None
-    file_size: Optional[int] = None
+    file_name: str | None = None
+    file_size: int | None = None
     created_at: datetime
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AgentBase(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     model_id: str
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None
 
 class AgentCreate(AgentBase):
     pass
@@ -41,14 +40,40 @@ class AgentCreate(AgentBase):
 class AgentResponse(AgentBase):
     id: str
     created_at: datetime
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+# Graph schemas (ADR 0002)
+
+class AgentNode(BaseModel):
+    id: str
+    type: Literal["agent"]
+    agent_id: str
+    prompt_override: str | None = None
+
+class ModelNode(BaseModel):
+    id: str
+    type: Literal["model"]
+    model_id: str
+
+class ToolNode(BaseModel):
+    id: str
+    type: Literal["tool"]
+    tool_name: str
+
+WorkflowNode = Annotated[Union[AgentNode, ModelNode, ToolNode], Field(discriminator="type")]
+
+class Edge(BaseModel):
+    id: str
+    source: str
+    target: str
+    source_handle: str | None = None
+    target_handle: str | None = None
 
 class WorkflowBase(BaseModel):
     name: str
-    description: Optional[str] = None
-    nodes: List[Dict[str, Any]] = []
-    edges: List[Dict[str, Any]] = []
+    description: str | None = None
+    nodes: list[WorkflowNode] = Field(default_factory=list)
+    edges: list[Edge] = Field(default_factory=list)
 
 class WorkflowCreate(WorkflowBase):
     pass
@@ -57,16 +82,15 @@ class WorkflowResponse(WorkflowBase):
     id: str
     created_at: datetime
     updated_at: datetime
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ExecutionResponse(BaseModel):
     id: str
-    workflow_id: str
+    workflow_id: str | None = None
+    workflow_snapshot: dict[str, Any] | None = None
     status: str
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
-    class Config:
-        orm_mode = True
+    completed_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
