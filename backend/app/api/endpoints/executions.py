@@ -54,7 +54,12 @@ async def get_execution(exec_id: str, db: AsyncSession = Depends(get_db)) -> Exe
     return db_exec
 
 @router.websocket("/{exec_id}/stream")
-async def websocket_endpoint(websocket: WebSocket, exec_id: str) -> None:
+async def websocket_endpoint(websocket: WebSocket, exec_id: str, token: str | None = None) -> None:
+    # In a real app, validate the token against the DB/JWT secret
+    if not token:
+        await websocket.close(code=1008, reason="Missing authentication token")
+        return
+        
     await websocket.accept()
     if exec_id not in active_connections:
         active_connections[exec_id] = []
