@@ -1,26 +1,67 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import models, agents, workflows, executions
 from app.core.config import settings
+import uuid
+import time
+import logging
+
+# Basic structured logger setup
+logger = logging.getLogger("agentflow")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter('{"time": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s"}'))
+logger.addHandler(handler)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
 )
 
-from app.core.database import engine
-from app.models.db import Base
-
-Base.metadata.create_all(bind=engine)
-
-# CORS setup
+# CORS setup (Phase 1 Fix D8)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For dev only
+    allow_origins=settings.CORS_ORIGINS if settings.CORS_ORIGINS else [],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_trace_and_log(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request.state.request_id = request_id
+    start_time = time.time()
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        logger.info(f"Path: {request.url.path} | Method: {request.method} | Status: {response.status_code} | Duration: {process_time:.4f}s | ReqID: {request_id}")
+        return response
+    except Exception as exc:
+        process_time = time.time() - start_time
+        logger.error(f"Path: {request.url.path} | Error: {str(exc)} | Duration: {process_time:.4f}s | ReqID: {request_id}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "An unexpected error occurred.",
+                    "request_id": request_id
+                }
+            }
+        )
+
+# Health endpoints
+@app.get("/healthz", tags=["health"])
+async def healthz():
+    return {"status": "ok"}
+
+@app.get("/readyz", tags=["health"])
+async def readyz():
+    # In future phases, verify DB and Redis connection here
+    return {"status": "ready"}
 
 # Includes routers
 app.include_router(models.router, prefix=settings.API_V1_STR)

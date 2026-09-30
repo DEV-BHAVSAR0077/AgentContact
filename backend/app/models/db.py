@@ -1,66 +1,70 @@
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, ForeignKey, Boolean
-from datetime import datetime
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
+from sqlalchemy import String, Integer, Float, DateTime, JSON, ForeignKey, Boolean
+from datetime import datetime, timezone
+from typing import Any
 import uuid
 
 Base = declarative_base()
 
-def generate_uuid():
+def generate_uuid() -> str:
     return str(uuid.uuid4())
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True, default=generate_uuid)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 class Model(Base):
     __tablename__ = "models"
-    id = Column(String, primary_key=True, default=generate_uuid)
-    name = Column(String, index=True)
-    source_type = Column(String) # 'api' or 'uploaded'
-    provider = Column(String, nullable=True) # e.g. openai, google
-    model_name = Column(String, nullable=True) # e.g. gpt-4, gemini-pro
-    api_key = Column(String, nullable=True)
-    base_url = Column(String, nullable=True)
-    temperature = Column(Integer, nullable=True)
-    max_tokens = Column(Integer, nullable=True)
-    system_prompt = Column(String, nullable=True)
-    framework = Column(String, nullable=True) # for uploaded
-    format = Column(String, nullable=True) # pkl, onnx
-    file_name = Column(String, nullable=True)
-    file_size = Column(Integer, nullable=True)
-    status = Column(String, default="READY")
-    input_schema = Column(JSON, nullable=True)
-    output_schema = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    name: Mapped[str] = mapped_column(String, index=True)
+    source_type: Mapped[str] = mapped_column(String) # 'api' or 'uploaded'
+    provider: Mapped[str | None] = mapped_column(String, nullable=True) # e.g. openai, google
+    model_name: Mapped[str | None] = mapped_column(String, nullable=True) # e.g. gpt-4, gemini-pro
+    api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True) # Fixed D2
+    max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    system_prompt: Mapped[str | None] = mapped_column(String, nullable=True)
+    framework: Mapped[str | None] = mapped_column(String, nullable=True) # for uploaded
+    format: Mapped[str | None] = mapped_column(String, nullable=True) # pkl, onnx
+    file_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="READY")
+    input_schema: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    output_schema: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     
 class Agent(Base):
     __tablename__ = "agents"
-    id = Column(String, primary_key=True, default=generate_uuid)
-    name = Column(String)
-    description = Column(String, nullable=True)
-    model_id = Column(String, ForeignKey("models.id"))
-    system_prompt = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_id: Mapped[str | None] = mapped_column(ForeignKey("models.id"), nullable=True)
+    system_prompt: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 class Workflow(Base):
     __tablename__ = "workflows"
-    id = Column(String, primary_key=True, default=generate_uuid)
-    name = Column(String)
-    description = Column(String, nullable=True)
-    nodes = Column(JSON, default=list) # Store react-flow nodes
-    edges = Column(JSON, default=list) # Store react-flow edges
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    nodes: Mapped[list[Any]] = mapped_column(JSON, default=list) # Store react-flow nodes
+    edges: Mapped[list[Any]] = mapped_column(JSON, default=list) # Store react-flow edges
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
 class Execution(Base):
     __tablename__ = "executions"
-    id = Column(String, primary_key=True, default=generate_uuid)
-    workflow_id = Column(String, ForeignKey("workflows.id"))
-    status = Column(String, default="PENDING") # PENDING, RUNNING, COMPLETED, FAILED
-    result = Column(JSON, nullable=True)
-    error = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    completed_at = Column(DateTime, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    workflow_id: Mapped[str | None] = mapped_column(ForeignKey("workflows.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String, default="PENDING") # PENDING, RUNNING, COMPLETED, FAILED
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
